@@ -51,7 +51,8 @@ export const sendEmail = async (to, subject, html) => {
         return { success: false, error };
     }
 };
-export const sendOTP = async (email, otp) => {
+const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
+export const sendOTP = async (email, otp, phone) => {
     const html = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;">
             <div style="text-align: center; margin-bottom: 20px;">
@@ -68,7 +69,37 @@ export const sendOTP = async (email, otp) => {
             </div>
         </div>
     `;
-    return sendEmail(email, 'Your 2FA OTP Code', html);
+    // 1. Send Email via Brevo REST API
+    try {
+        console.log(`[BREVO] Sending OTP email to ${email}`);
+        const emailResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+                'accept': 'application/json',
+                'api-key': BREVO_API_KEY,
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({
+                sender: {
+                    name: 'Dhanvantri Hospital',
+                    email: 'hms@dhanwantrihospital.com'
+                },
+                to: [{ email }],
+                subject: 'Your 2FA OTP Code',
+                htmlContent: html
+            })
+        });
+        if (!emailResponse.ok) {
+            const errText = await emailResponse.text();
+            console.error(`[BREVO] Email API error: ${errText}`);
+        }
+        else {
+            console.log(`[BREVO] Email successfully sent to ${email}`);
+        }
+    }
+    catch (err) {
+        console.error('[BREVO] Email sending failed:', err);
+    }
 };
 export const sendCredentialsEmail = async (email, name, password) => {
     const loginUrl = process.env.FRONTEND_URL || 'http://localhost:5173/login';
@@ -98,5 +129,37 @@ export const sendCredentialsEmail = async (email, name, password) => {
             </div>
         </div>
     `;
-    return sendEmail(email, 'Your Patient Portal Access', html);
+    try {
+        console.log(`[BREVO] Sending credentials email to ${email}`);
+        const emailResponse = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+                'accept': 'application/json',
+                'api-key': BREVO_API_KEY,
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({
+                sender: {
+                    name: 'Dhanvantri Hospital',
+                    email: 'hms@dhanwantrihospital.com'
+                },
+                to: [{ email }],
+                subject: 'Your Patient Portal Access',
+                htmlContent: html
+            })
+        });
+        if (!emailResponse.ok) {
+            const errText = await emailResponse.text();
+            console.error(`[BREVO] Credentials Email API error: ${errText}`);
+            return { success: false, error: errText };
+        }
+        else {
+            console.log(`[BREVO] Credentials Email successfully sent to ${email}`);
+            return { success: true };
+        }
+    }
+    catch (err) {
+        console.error('[BREVO] Credentials Email sending failed:', err);
+        return { success: false, error: err };
+    }
 };

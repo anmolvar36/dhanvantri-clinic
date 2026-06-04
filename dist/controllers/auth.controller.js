@@ -32,6 +32,14 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         data: result
     });
 });
+export const resendOTP = asyncHandler(async (req, res) => {
+    const result = await authService.resendOTP(req.body.email);
+    res.status(200).json({
+        success: true,
+        message: 'New verification code sent',
+        data: result
+    });
+});
 export const getMyClinics = asyncHandler(async (req, res) => {
     const clinics = await authService.getMyClinics(req.user.id);
     res.status(200).json({
