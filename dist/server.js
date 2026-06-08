@@ -58,7 +58,11 @@ app.use(compression());
 const isProd = process.env.NODE_ENV === 'production';
 app.use(cors({
     origin: isProd
-        ? 'https://ev-clinic.wenbear.online' // 👉 replace with your frontend URL
+        ? [
+            'https://ev-clinic.wenbear.online',
+            'https://dhnawantrai-backedn.softwaredemolive.live',
+            'https://dhanwantrari-production.up.railway.app'
+        ]
         : true, // allow all in development
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],

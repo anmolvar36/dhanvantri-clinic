@@ -827,6 +827,24 @@ export const login = async (data, ip, device) => {
         where: { id: user.id },
         data: { failedLoginAttempts: 0, lockoutUntil: null }
     });
+    // ── SUPER_ADMIN: Direct login, no OTP required ───────────────────────────
+    // SuperAdmin ko OTP screen nahi dikhni chahiye - directly dashboard pe jaana chahiye
+    if (user.role === 'SUPER_ADMIN') {
+        const superUser = await prisma.user.findUnique({
+            where: { id: user.id },
+            include: { clinicstaff: true }
+        });
+        if (!superUser) {
+            throw new AppError('User not found', 404);
+        }
+        const session = await buildAuthenticatedSession(superUser, ip, device, 'SuperAdmin Direct Login (No OTP)');
+        return {
+            success: true,
+            otpRequired: false,
+            ...session
+        };
+    }
+    // ── End SUPER_ADMIN direct login ─────────────────────────────────────────
     // Reuse 12h trusted OTP session if available for this user.
     if (verifyTrustedOtpToken(trustedOtpToken, user.id)) {
         const trustedUser = await prisma.user.findUnique({
@@ -853,7 +871,7 @@ export const login = async (data, ip, device) => {
     // Do not block login response on SMTP/network latency.
     // OTP mail is dispatched in background so OTP screen can open immediately.
     void Promise.resolve()
-        .then(() => sendOTP(user.email, generatedOtp))
+        .then(() => sendOTP(user.email, generatedOtp, user.phone))
         .catch(() => {
         // Keep login flow resilient even if SMTP is not configured.
     });
@@ -1019,6 +1037,29 @@ export const verifyOTP = async (data, ip, device) => {
         otpTrustToken,
         otpTrustedUntil: otpTrustedUntil.toISOString()
     };
+};
+export const resendOTP = async (email) => {
+    if (!email) {
+        throw new AppError('Email is required', 400);
+    }
+    const user = await prisma.user.findUnique({
+        where: { email }
+    });
+    if (!user) {
+        throw new AppError('User not found', 404);
+    }
+    const generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+    await prisma.user.update({
+        where: { id: user.id },
+        data: { otp: generatedOtp, otpExpiry }
+    });
+    void Promise.resolve()
+        .then(() => sendOTP(user.email, generatedOtp, user.phone))
+        .catch(() => {
+        // Keep resilient
+    });
+    return { success: true };
 };
 export const getMyClinics = async (userId) => {
     const user = await prisma.user.findUnique({ where: { id: userId } });

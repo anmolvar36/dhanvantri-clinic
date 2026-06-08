@@ -38,6 +38,15 @@ export const verifyOTP = asyncHandler(async (req: AuthRequest, res: Response) =>
     });
 });
 
+export const resendOTP = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const result = await authService.resendOTP(req.body.email);
+    res.status(200).json({
+        success: true,
+        message: 'New verification code sent',
+        data: result
+    });
+});
+
 export const getMyClinics = asyncHandler(async (req: AuthRequest, res: Response) => {
     const clinics = await authService.getMyClinics(req.user!.id);
     res.status(200).json({

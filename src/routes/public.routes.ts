@@ -15,4 +15,13 @@ router.get('/clinic/:subdomain/live-tokens', publicController.getTokens);
 router.get('/plans', saasController.getPlans);
 router.post('/register', saasController.createRegistration);
 
+// ── Registration Email OTP Verification ─────────────────────────────────────
+// Step 1: Form submit → OTP bhejo email pe (account abhi nahi banega)
+router.post('/send-registration-otp', saasController.sendRegistrationOtp);
+// Step 2: OTP verify → Account / Request banao
+router.post('/verify-and-register', saasController.verifyAndRegister);
+// Resend registration OTP
+router.post('/resend-registration-otp', saasController.resendRegistrationOtp);
+// ── End Registration OTP ─────────────────────────────────────────────────────
+
 export default router;
