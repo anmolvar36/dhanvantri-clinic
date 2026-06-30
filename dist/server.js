@@ -61,7 +61,8 @@ app.use(cors({
         ? [
             'https://ev-clinic.wenbear.online',
             'https://dhnawantrai-backedn.softwaredemolive.live',
-            'https://dhanwantrari-production.up.railway.app'
+            'https://dhanwantrari-production.up.railway.app',
+            'https://dhanvantri-clinic-production.up.railway.app',
         ]
         : true, // allow all in development
     credentials: true,

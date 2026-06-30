@@ -1,7 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
 import bcrypt from 'bcryptjs';
 import { AppError } from '../utils/AppError.js';
-const prisma = new PrismaClient();
 export const getClinicBySubdomain = async (subdomain) => {
     // Allow lookup by subdomain OR id (for robustness)
     const clinic = await prisma.clinic.findFirst({

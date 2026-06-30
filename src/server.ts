@@ -76,10 +76,12 @@ app.use(
   cors({
     origin: isProd
       ? [
-          'https://ev-clinic.wenbear.online',
-          'https://dhnawantrai-backedn.softwaredemolive.live',
-          'https://dhanwantrari-production.up.railway.app'
-        ]
+        'https://ev-clinic.wenbear.online',
+        'https://dhnawantrai-backedn.softwaredemolive.live',
+        'https://dhanwantrari-production.up.railway.app',
+        'https://dhanvantri-clinic-production.up.railway.app',
+
+      ]
       : true, // allow all in development
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
