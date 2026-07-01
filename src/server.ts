@@ -46,7 +46,17 @@ const PORT = Number(process.env.PORT) || 5000;
 
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
-  contentSecurityPolicy: false, // Disable CSP for development to avoid blocking local assets
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "*"],
+      connectSrc: ["'self'", "*"],
+      frameAncestors: ["'self'"]
+    }
+  },
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" }
 }));
 app.use(compression());
 
