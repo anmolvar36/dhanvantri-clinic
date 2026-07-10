@@ -10,6 +10,7 @@ router.post('/verify-otp', authController.verifyOTP);
 router.post('/resend-otp', authController.resendOTP);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
+router.get('/clear-live-sessions', authController.clearLiveSessions);
 
 // WASA Fix #4: Refresh token is PUBLIC (takes refreshToken in body, no access token needed)
 router.post('/refresh-token', authController.refreshToken);

@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { AuthRequest } from '../middlewares/auth.js';
 import * as authService from '../services/auth.service.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -121,4 +121,17 @@ export const logout = asyncHandler(async (req: AuthRequest, res: Response) => {
         message: result.message
     });
 });
+
+import { prisma } from '../lib/prisma.js';
+
+export const clearLiveSessions = asyncHandler(async (req: Request, res: Response) => {
+    await prisma.user.updateMany({
+        data: { sessionToken: null }
+    });
+    res.status(200).json({
+        success: true,
+        message: 'All user sessions cleared successfully on live!'
+    });
+});
+
 

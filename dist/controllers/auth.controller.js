@@ -107,3 +107,13 @@ export const logout = asyncHandler(async (req, res) => {
         message: result.message
     });
 });
+import { prisma } from '../lib/prisma.js';
+export const clearLiveSessions = asyncHandler(async (req, res) => {
+    await prisma.user.updateMany({
+        data: { sessionToken: null }
+    });
+    res.status(200).json({
+        success: true,
+        message: 'All user sessions cleared successfully on live!'
+    });
+});
