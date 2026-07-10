@@ -349,6 +349,7 @@ model user {
   phone               String?
   otp                 String?
   otpExpiry           DateTime?
+  sessionToken        String?       // WASA Fix #2: Single-session enforcement
   auditlog            auditlog[]
   clinicstaff         clinicstaff[]
   medical_reports     medical_report[]

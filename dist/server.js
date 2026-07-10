@@ -30,8 +30,10 @@ import dashboardRoutes from './routes/dashboard.routes.js';
 import medicalReportRoutes from './routes/medicalReport.routes.js';
 import { startTime } from './utils/system.js';
 import { prisma } from './lib/prisma.js';
+import { globalErrorHandler } from './middlewares/errorHandler.js';
 const app = express();
-console.log("🔌 Connecting to Database URL:", process.env.DATABASE_URL); // Debug Log
+// WASA Fix #6: Remove X-Powered-By header (version disclosure)
+app.disable('x-powered-by');
 const PORT = Number(process.env.PORT) || 5000;
 /* -------------------- MIDDLEWARES -------------------- */
 app.use(helmet({
@@ -87,7 +89,8 @@ app.use(cors({
     ],
     exposedHeaders: ["set-cookie", "Authorization"]
 }));
-app.use(morgan('dev'));
+// WASA Fix #6: Morgan — dev format only in development (no version leakage in production)
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.get('/health', (_req, res) => {
@@ -129,18 +132,8 @@ app.get('/health', (_req, res) => {
     });
 });
 /* -------------------- GLOBAL ERROR HANDLER -------------------- */
-app.use((err, _req, res, _next) => {
-    const statusCode = err.statusCode || 500;
-    console.error(`[GLOBAL ERROR HANDLER] Status: ${statusCode} | Message: ${err.message}`);
-    if (statusCode === 500)
-        console.error(err);
-    res.status(statusCode).json({
-        success: false,
-        status: err.status || 'error',
-        message: err.message || 'Internal Server Error',
-        error: process.env.NODE_ENV === 'development' ? err : undefined
-    });
-});
+// WASA Fix #3: Centralized safe error handler (no stack traces in production)
+app.use(globalErrorHandler);
 /* -------------------- SERVER START -------------------- */
 const server = app.listen(PORT, () => {
     console.log(`

@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "npm run build && nodemon dist/server.js",
-    "build": "prisma generate && tsc",
+    "build": "npx prisma@5.22.0 generate && tsc",
     "start": "node dist/server.js",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate deploy",
+    "prisma:generate": "npx prisma@5.22.0 generate",
+    "prisma:migrate": "npx prisma@5.22.0 migrate deploy",
     "seed": "node prisma/seed.js",
     "backfill:gst": "node prisma/backfill-gst.js"
   },
@@ -26,10 +26,9 @@
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
     "nodemailer": "^7.0.12",
-    "prisma": "^5.22.0",
-    "zod": "^4.3.5",
+    "tsx": "^4.19.2",
     "typescript": "^5.3.3",
-    "tsx": "^4.19.2"
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -39,6 +38,7 @@
     "@types/morgan": "^1.9.10",
     "@types/node": "^25.0.8",
     "@types/nodemailer": "^7.0.5",
-    "nodemon": "^3.1.7"
+    "nodemon": "^3.1.7",
+    "prisma": "^7.8.0"
   }
 }

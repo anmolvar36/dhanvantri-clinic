@@ -666,10 +666,15 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const LOG_PATH = path.join(__dirname, '../../login-debug.log');
-const signToken = (payload, expires = '1h') => {
+// WASA Fix #4: Access token expiry reduced to 15 minutes
+const signToken = (payload, expires = '15m') => {
     return jwt.sign(payload, process.env.JWT_SECRET || 'secret', {
         expiresIn: expires
     });
+};
+// WASA Fix #4: Refresh token (7 days) — used to get new access tokens silently
+const signRefreshToken = (payload) => {
+    return jwt.sign({ ...payload, type: 'refresh' }, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
 };
 import { sendOTP } from './mail.service.js';
 const OTP_TRUST_HOURS = 12;
@@ -685,6 +690,13 @@ const verifyTrustedOtpToken = (token, userId) => {
     }
 };
 const buildAuthenticatedSession = async (user, ip, device, auditAction = '2FA Verification Success') => {
+    // WASA Fix #2: Generate unique session token and store in DB
+    const { randomUUID } = await import('crypto');
+    const sessionToken = randomUUID();
+    await prisma.user.update({
+        where: { id: user.id },
+        data: { sessionToken }
+    });
     const staffRecords = user.clinicstaff || [];
     // Patient flow (no clinicstaff rows)
     if (user.role === 'PATIENT' && staffRecords.length === 0) {
@@ -765,8 +777,10 @@ const buildAuthenticatedSession = async (user, ip, device, auditAction = '2FA Ve
     const token = signToken({
         id: user.id,
         role: tokenRole,
-        clinicId: targetClinicId
+        clinicId: targetClinicId,
+        sessionToken // WASA Fix #2: embed session token in JWT
     });
+    const refreshToken = signRefreshToken({ id: user.id, sessionToken });
     // Auditor log
     await prisma.auditlog.create({
         data: {
@@ -787,12 +801,12 @@ const buildAuthenticatedSession = async (user, ip, device, auditAction = '2FA Ve
             roles,
             clinics: staffRecords.map((r) => r.clinicId)
         },
-        token
+        token,
+        refreshToken // WASA Fix #4: include refresh token
     };
 };
 export const login = async (data, ip, device) => {
     const { email, password, trustedOtpToken } = data;
-    console.log(`[DEBUG] Attempting login for email: ${email}`);
     if (!prisma) {
         console.error('[CRITICAL] Prisma client is undefined! Possible circular dependency.');
         throw new Error('Database client not initialized');
@@ -827,8 +841,20 @@ export const login = async (data, ip, device) => {
         where: { id: user.id },
         data: { failedLoginAttempts: 0, lockoutUntil: null }
     });
+    // ── WASA Fix #2: Block concurrent login (First-Login-Wins) ─────────────
+    // If sessionToken already exists → this account is already logged in somewhere.
+    // However, if the session has been inactive for more than 15 minutes (or 7 days if they have refresh tokens),
+    // we consider the session expired and allow a new login to hijack/override it.
+    if (user.sessionToken) {
+        const inactivityLimit = 15 * 60 * 1000; // 15 minutes session timeout
+        const timeSinceLastActivity = Date.now() - new Date(user.updatedAt).getTime();
+        const isSessionActive = timeSinceLastActivity < inactivityLimit;
+        if (isSessionActive) {
+            throw new AppError('This account is already logged in from another device. Please log out from the existing session first.', 409);
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
     // ── SUPER_ADMIN: Direct login, no OTP required ───────────────────────────
-    // SuperAdmin ko OTP screen nahi dikhni chahiye - directly dashboard pe jaana chahiye
     if (user.role === 'SUPER_ADMIN') {
         const superUser = await prisma.user.findUnique({
             where: { id: user.id },
@@ -861,12 +887,13 @@ export const login = async (data, ip, device) => {
             ...trustedSession
         };
     }
-    // Create OTP session (for UI flow). For now, verification accepts any 6-digit OTP.
+    // WASA Fix #8: Generate OTP — store as bcrypt hash (NEVER plain text)
     const generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
+    const otpHash = await bcrypt.hash(generatedOtp, 10);
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
     await prisma.user.update({
         where: { id: user.id },
-        data: { otp: generatedOtp, otpExpiry }
+        data: { otp: otpHash, otpExpiry } // Store hash, NOT plain OTP
     });
     // Do not block login response on SMTP/network latency.
     // OTP mail is dispatched in background so OTP screen can open immediately.
@@ -919,10 +946,10 @@ export const login = async (data, ip, device) => {
         if (activeClinics.length === 1) {
             targetClinicId = activeClinics[0].clinicId;
         }
+        // WASA Fix #8: OTP is sent by email ONLY — never in API response
         return {
             success: true,
             otpRequired: true,
-            devOtp: generatedOtp,
             user: {
                 id: user.id,
                 email: user.email,
@@ -987,10 +1014,10 @@ export const login = async (data, ip, device) => {
     else {
         tokenRole = user.role;
     }
+    // WASA Fix #8: OTP is sent by email ONLY — NEVER returned in API response
     return {
         success: true,
         otpRequired: true,
-        devOtp: generatedOtp,
         user: {
             id: user.id,
             email: user.email,
@@ -1018,7 +1045,8 @@ export const verifyOTP = async (data, ip, device) => {
     if (!/^\d{6}$/.test(otpString)) {
         throw new AppError('Enter a valid 6-digit verification code', 401);
     }
-    if (!user.otp || String(user.otp) !== otpString) {
+    // WASA Fix #8: Compare against bcrypt hash — not plain text
+    if (!user.otp || !(await bcrypt.compare(otpString, user.otp))) {
         throw new AppError('Invalid verification code', 401);
     }
     // Clear OTP after success
@@ -1048,18 +1076,75 @@ export const resendOTP = async (email) => {
     if (!user) {
         throw new AppError('User not found', 404);
     }
+    // WASA Fix #8: Store hashed OTP
     const generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
+    const otpHash = await bcrypt.hash(generatedOtp, 10);
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000);
     await prisma.user.update({
         where: { id: user.id },
-        data: { otp: generatedOtp, otpExpiry }
+        data: { otp: otpHash, otpExpiry }
     });
+    // OTP sent via email only — never in API response
     void Promise.resolve()
         .then(() => sendOTP(user.email, generatedOtp, user.phone))
-        .catch(() => {
-        // Keep resilient
-    });
+        .catch(() => { });
     return { success: true };
+};
+// ─────────────────────────────────────────────────────────────────────────────
+// WASA Fix #2: Logout — clears sessionToken so account becomes available again
+// ─────────────────────────────────────────────────────────────────────────────
+export const logout = async (userId, ip, device) => {
+    await prisma.user.update({
+        where: { id: userId },
+        data: { sessionToken: null }
+    });
+    await prisma.auditlog.create({
+        data: {
+            action: 'Logout',
+            performedBy: String(userId),
+            userId,
+            ipAddress: ip,
+            device
+        }
+    });
+    return { message: 'Logged out successfully.' };
+};
+// ─────────────────────────────────────────────────────────────────────────────
+// WASA Fix #4: Refresh Access Token
+//   • Verifies refresh token signature
+//   • Checks sessionToken still matches DB (not logged out)
+//   • Issues new 15-minute access token
+// ─────────────────────────────────────────────────────────────────────────────
+export const refreshAccessToken = async (refreshTokenStr) => {
+    let decoded;
+    try {
+        decoded = jwt.verify(refreshTokenStr, process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET || 'secret');
+    }
+    catch {
+        throw new AppError('Invalid or expired refresh token. Please log in again.', 401);
+    }
+    if (decoded.type !== 'refresh') {
+        throw new AppError('Invalid token type.', 401);
+    }
+    const user = await prisma.user.findUnique({
+        where: { id: decoded.id },
+        select: { id: true, email: true, role: true, sessionToken: true, status: true }
+    });
+    if (!user)
+        throw new AppError('User not found.', 401);
+    if (user.status === 'inactive')
+        throw new AppError('Account is deactivated.', 403);
+    // Validate session is still active
+    if (!user.sessionToken || user.sessionToken !== decoded.sessionToken) {
+        throw new AppError('Session expired. Please log in again.', 401);
+    }
+    // Issue new access token
+    const newAccessToken = signToken({
+        id: user.id,
+        role: user.role,
+        sessionToken: user.sessionToken
+    });
+    return { token: newAccessToken };
 };
 export const getMyClinics = async (userId) => {
     const user = await prisma.user.findUnique({ where: { id: userId } });

@@ -91,7 +91,11 @@ export const changePassword = asyncHandler(async (req: AuthRequest, res: Respons
 });
 
 export const refreshToken = asyncHandler(async (req: AuthRequest, res: Response) => {
-    const result = await authService.refreshToken(req.user!.id);
+    const { refreshToken: tokenStr } = req.body;
+    if (!tokenStr) {
+        throw new Error('Refresh token is required');
+    }
+    const result = await authService.refreshAccessToken(tokenStr);
     res.status(200).json({
         success: true,
         data: result
@@ -107,3 +111,14 @@ export const impersonate = asyncHandler(async (req: AuthRequest, res: Response) 
         data: result
     });
 });
+
+// WASA Fix #2: Logout — clears session token so account is available for next login
+export const logout = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { ip, device } = getClientInfo(req);
+    const result = await authService.logout(req.user!.id, ip, device);
+    res.status(200).json({
+        success: true,
+        message: result.message
+    });
+});
+
