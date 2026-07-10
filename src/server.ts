@@ -104,7 +104,7 @@ app.use(
       "Accept",
       "X-Auth-Token"
     ],
-    exposedHeaders: ["set-cookie", "Authorization"]
+    exposedHeaders: ["set-cookie", "Authorization", "X-Payload-Encrypted"]
   })
 );
 

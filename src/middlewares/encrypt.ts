@@ -11,8 +11,9 @@ const encryptPayload = (text: string): string => {
 };
 
 export const encryptResponseMiddleware = (req: Request, res: Response, next: NextFunction) => {
-    // Only encrypt in production
-    if (process.env.NODE_ENV !== 'production') {
+    const isLocal = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+    // Only bypass encryption if running locally AND NODE_ENV is not production
+    if (isLocal && process.env.NODE_ENV !== 'production') {
         return next();
     }
 

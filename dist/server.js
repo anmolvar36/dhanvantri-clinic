@@ -88,7 +88,7 @@ app.use(cors({
         "Accept",
         "X-Auth-Token"
     ],
-    exposedHeaders: ["set-cookie", "Authorization"]
+    exposedHeaders: ["set-cookie", "Authorization", "X-Payload-Encrypted"]
 }));
 // WASA Fix #6: Morgan — dev format only in development (no version leakage in production)
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));

@@ -7,8 +7,9 @@ const encryptPayload = (text) => {
     return buffer.toString('base64');
 };
 export const encryptResponseMiddleware = (req, res, next) => {
-    // Only encrypt in production
-    if (process.env.NODE_ENV !== 'production') {
+    const isLocal = req.hostname === 'localhost' || req.hostname === '127.0.0.1';
+    // Only bypass encryption if running locally AND NODE_ENV is not production
+    if (isLocal && process.env.NODE_ENV !== 'production') {
         return next();
     }
     const originalJson = res.json;
