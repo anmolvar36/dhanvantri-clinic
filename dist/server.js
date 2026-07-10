@@ -31,6 +31,7 @@ import medicalReportRoutes from './routes/medicalReport.routes.js';
 import { startTime } from './utils/system.js';
 import { prisma } from './lib/prisma.js';
 import { globalErrorHandler } from './middlewares/errorHandler.js';
+import { encryptResponseMiddleware } from './middlewares/encrypt.js';
 const app = express();
 // WASA Fix #6: Remove X-Powered-By header (version disclosure)
 app.disable('x-powered-by');
@@ -93,6 +94,7 @@ app.use(cors({
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(encryptResponseMiddleware);
 app.get('/health', (_req, res) => {
     res.status(200).json({
         success: true,

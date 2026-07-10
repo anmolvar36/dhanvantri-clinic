@@ -34,6 +34,7 @@ import medicalReportRoutes from './routes/medicalReport.routes.js';
 import { startTime } from './utils/system.js';
 import { prisma } from './lib/prisma.js';
 import { globalErrorHandler } from './middlewares/errorHandler.js';
+import { encryptResponseMiddleware } from './middlewares/encrypt.js';
 
 const app = express();
 
@@ -113,6 +114,7 @@ app.use(
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(encryptResponseMiddleware);
 app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({
     success: true,
