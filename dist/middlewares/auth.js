@@ -17,33 +17,14 @@ export const protect = async (req, res, next) => {
             return next(new AppError('You are not logged in. Please log in to get access.', 401));
         }
         let decoded;
-        let isExpired = false;
         try {
             decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
         }
         catch (err) {
             if (err.name === 'TokenExpiredError') {
-                isExpired = true;
-                decoded = jwt.decode(token);
+                return next(new AppError('Your session has expired. Please log in again.', 401));
             }
-            else {
-                return next(new AppError('Invalid token. Please log in again.', 401));
-            }
-        }
-        const isLogoutRequest = req.path === '/logout' || req.originalUrl.endsWith('/logout');
-        if (isLogoutRequest) {
-            if (decoded && decoded.id) {
-                req.user = {
-                    id: Number(decoded.id),
-                    email: decoded.email || '',
-                    role: decoded.role || '',
-                    sessionToken: decoded.sessionToken || ''
-                };
-                return next();
-            }
-        }
-        if (isExpired) {
-            return next(new AppError('Your session has expired. Please log in again.', 401));
+            return next(new AppError('Invalid token. Please log in again.', 401));
         }
         // DB lookup — ensures user still exists + gets current sessionToken
         const currentUser = await prisma.user.findUnique({

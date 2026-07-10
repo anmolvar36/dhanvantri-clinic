@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "npm run build && nodemon dist/server.js",
     "build": "npx prisma@5.22.0 generate && tsc",
-    "start": "node dist/server.js",
+    "start": "node dist/run_migration.js && node dist/server.js",
     "prisma:generate": "npx prisma@5.22.0 generate",
     "prisma:migrate": "npx prisma@5.22.0 migrate deploy",
     "seed": "node prisma/seed.js",
@@ -39,6 +39,6 @@
     "@types/node": "^25.0.8",
     "@types/nodemailer": "^7.0.5",
     "nodemon": "^3.1.7",
-    "prisma": "^7.8.0"
+    "prisma": "^5.22.0"
   }
 }
