@@ -150,18 +150,36 @@ export const deleteMukulData = asyncHandler(async (req: Request, res: Response) 
         for (const user of users) {
             log.push(`Cleaning up records for user ID ${user.id}...`);
             
-            // Delete related tables where user is foreign key
-            const uAudit = await prisma.auditlog.deleteMany({ where: { userId: user.id } });
-            log.push(`- Deleted ${uAudit.count} auditlogs for user.`);
+            // Delete related tables where user is foreign key (try/catch each to make it robust)
+            try {
+                const uAudit = await prisma.auditlog.deleteMany({ where: { userId: user.id } });
+                log.push(`- Deleted ${uAudit.count} auditlogs for user.`);
+            } catch (err: any) {
+                log.push(`- Skip auditlog for user: ${err.message}`);
+            }
 
-            const uStaff = await prisma.clinicstaff.deleteMany({ where: { userId: user.id } });
-            log.push(`- Deleted ${uStaff.count} clinicstaff records for user.`);
+            try {
+                const uStaff = await prisma.clinicstaff.deleteMany({ where: { userId: user.id } });
+                log.push(`- Deleted ${uStaff.count} clinicstaff records for user.`);
+            } catch (err: any) {
+                log.push(`- Skip clinicstaff for user: ${err.message}`);
+            }
 
-            const uReports = await prisma.medical_report.deleteMany({ where: { doctorId: user.id } });
-            log.push(`- Deleted ${uReports.count} medical reports where user was doctor.`);
+            try {
+                const uReports = await prisma.medical_report.deleteMany({ where: { doctorId: user.id } });
+                log.push(`- Deleted ${uReports.count} medical reports where user was doctor.`);
+            } catch (err: any) {
+                log.push(`- Skip medical_report for user: ${err.message}`);
+            }
 
-            const uShortcuts = await prisma.doctor_shortcuts.deleteMany({ where: { userId: user.id } });
-            log.push(`- Deleted ${uShortcuts.count} doctor shortcuts for user.`);
+            try {
+                const uShortcuts = (prisma as any).doctor_shortcuts 
+                    ? await (prisma as any).doctor_shortcuts.deleteMany({ where: { userId: user.id } })
+                    : { count: 0 };
+                log.push(`- Deleted ${uShortcuts.count} doctor shortcuts for user.`);
+            } catch (err: any) {
+                log.push(`- Skip doctor_shortcuts for user: ${err.message}`);
+            }
         }
 
         // 2. Find all clinics matching this email
@@ -173,99 +191,94 @@ export const deleteMukulData = asyncHandler(async (req: Request, res: Response) 
         for (const clinic of clinics) {
             log.push(`Cleaning up records for clinic ID ${clinic.id}...`);
 
-            // Delete clinic-dependent records
-            const cAppt = await prisma.appointment.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cAppt.count} appointments.`);
+            const deleteClinicScoped = async (name: string, model: any) => {
+                try {
+                    if (model && typeof model.deleteMany === 'function') {
+                        const res = await model.deleteMany({ where: { clinicId: clinic.id } });
+                        log.push(`- Deleted ${res.count} ${name}.`);
+                    }
+                } catch (err: any) {
+                    log.push(`- Skip ${name}: ${err.message}`);
+                }
+            };
 
-            const cAudit = await prisma.auditlog.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cAudit.count} clinic auditlogs.`);
+            // Delete clinic-dependent records
+            await deleteClinicScoped('appointments', prisma.appointment);
+            await deleteClinicScoped('clinic auditlogs', prisma.auditlog);
 
             // Get all staff user IDs in the clinic to clean them up if they don't belong to any other clinic
-            const staffList = await prisma.clinicstaff.findMany({ where: { clinicId: clinic.id } });
-            const userIdsToDelete = staffList.map(s => s.userId);
+            let userIdsToDelete: number[] = [];
+            try {
+                const staffList = await prisma.clinicstaff.findMany({ where: { clinicId: clinic.id } });
+                userIdsToDelete = staffList.map(s => s.userId);
+            } catch (err: any) {
+                log.push(`- Skip getting staff list: ${err.message}`);
+            }
 
-            const cStaff = await prisma.clinicstaff.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cStaff.count} clinicstaff records.`);
-
-            // Delete other clinic-scoped tables
-            const cDept = await prisma.department.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cDept.count} departments.`);
-
-            const cFormResp = await prisma.formresponse.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cFormResp.count} form responses.`);
-
-            const cFormTemp = await prisma.formtemplate.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cFormTemp.count} form templates.`);
-
-            const cInv = await prisma.inventory.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cInv.count} inventory items.`);
-
-            const cInvoice = await prisma.invoice.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cInvoice.count} invoices.`);
-
-            const cMedRec = await prisma.medicalrecord.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cMedRec.count} medical records.`);
-
-            const cMedRep = await prisma.medical_report.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cMedRep.count} medical reports.`);
-
-            const cNotif = await prisma.notification.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cNotif.count} notifications.`);
-
-            const cPatDoc = await prisma.patient_document.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cPatDoc.count} patient documents.`);
-
-            const cPat = await prisma.patient.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cPat.count} patients.`);
-
-            const cServOrd = await prisma.service_order.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cServOrd.count} service orders.`);
-
-            const cStaffDoc = await prisma.staff_document.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cStaffDoc.count} staff documents.`);
-
-            const cSubInv = await prisma.subscription_invoice.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cSubInv.count} subscription invoices.`);
-
-            const cMedTemp = await prisma.medical_report_templates.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cMedTemp.count} medical report templates.`);
-
-            const cServ = await prisma.clinic_service.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cServ.count} clinic services.`);
-
-            const cShortcuts = await prisma.doctor_shortcuts.deleteMany({ where: { clinicId: clinic.id } });
-            log.push(`- Deleted ${cShortcuts.count} doctor shortcuts.`);
+            await deleteClinicScoped('clinicstaff records', prisma.clinicstaff);
+            await deleteClinicScoped('departments', prisma.department);
+            await deleteClinicScoped('form responses', (prisma as any).formresponse);
+            await deleteClinicScoped('form templates', (prisma as any).formtemplate);
+            await deleteClinicScoped('inventory items', prisma.inventory);
+            await deleteClinicScoped('invoices', prisma.invoice);
+            await deleteClinicScoped('medical records', prisma.medicalrecord);
+            await deleteClinicScoped('medical reports', prisma.medical_report);
+            await deleteClinicScoped('notifications', prisma.notification);
+            await deleteClinicScoped('patient documents', (prisma as any).patient_document);
+            await deleteClinicScoped('patients', prisma.patient);
+            await deleteClinicScoped('service orders', prisma.service_order);
+            await deleteClinicScoped('staff documents', (prisma as any).staff_document);
+            await deleteClinicScoped('subscription invoices', prisma.subscription_invoice);
+            await deleteClinicScoped('medical report templates', (prisma as any).medical_report_templates);
+            await deleteClinicScoped('clinic services', (prisma as any).clinic_service);
+            await deleteClinicScoped('doctor shortcuts', (prisma as any).doctor_shortcuts);
 
             // Delete the clinic itself
-            await prisma.clinic.delete({ where: { id: clinic.id } });
-            log.push(`- Deleted clinic ID ${clinic.id} itself.`);
+            try {
+                await prisma.clinic.delete({ where: { id: clinic.id } });
+                log.push(`- Deleted clinic ID ${clinic.id} itself.`);
+            } catch (err: any) {
+                log.push(`- Error deleting clinic itself: ${err.message}`);
+            }
 
             // Now clean up staff users who were only in this clinic
             for (const uId of userIdsToDelete) {
-                const otherAssociations = await prisma.clinicstaff.count({ where: { userId: uId } });
-                if (otherAssociations === 0) {
-                    const u = await prisma.user.findUnique({ where: { id: uId } });
-                    if (u && u.email !== email) { // Main user will be deleted in the next step
-                        await prisma.auditlog.deleteMany({ where: { userId: uId } });
-                        await prisma.doctor_shortcuts.deleteMany({ where: { userId: uId } });
-                        await prisma.user.delete({ where: { id: uId } });
-                        log.push(`- Deleted orphaned staff user: ${u.email} (ID ${uId})`);
+                try {
+                    const otherAssociations = await prisma.clinicstaff.count({ where: { userId: uId } });
+                    if (otherAssociations === 0) {
+                        const u = await prisma.user.findUnique({ where: { id: uId } });
+                        if (u && u.email !== email) { // Main user will be deleted in the next step
+                            try { await prisma.auditlog.deleteMany({ where: { userId: uId } }); } catch(e){}
+                            try { if ((prisma as any).doctor_shortcuts) await (prisma as any).doctor_shortcuts.deleteMany({ where: { userId: uId } }); } catch(e){}
+                            await prisma.user.delete({ where: { id: uId } });
+                            log.push(`- Deleted orphaned staff user: ${u.email} (ID ${uId})`);
+                        }
                     }
+                } catch (err: any) {
+                    log.push(`- Skip staff user ${uId} cleanup: ${err.message}`);
                 }
             }
         }
 
         // 3. Delete users themselves
         for (const user of users) {
-            await prisma.user.delete({ where: { id: user.id } });
-            log.push(`Deleted user ${user.email} (ID ${user.id}).`);
+            try {
+                await prisma.user.delete({ where: { id: user.id } });
+                log.push(`Deleted user ${user.email} (ID ${user.id}).`);
+            } catch (err: any) {
+                log.push(`- Error deleting user ID ${user.id}: ${err.message}`);
+            }
         }
 
         // 4. Delete registration request
-        const delReg = await prisma.registration_request.deleteMany({
-            where: { email }
-        });
-        log.push(`Deleted ${delReg.count} registration requests for ${email}.`);
+        try {
+            const delReg = await prisma.registration_request.deleteMany({
+                where: { email }
+            });
+            log.push(`Deleted ${delReg.count} registration requests for ${email}.`);
+        } catch (err: any) {
+            log.push(`- Error deleting registration requests: ${err.message}`);
+        }
 
         res.status(200).json({
             success: true,
