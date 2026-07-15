@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../utils/AppError.js';
+import { validateBase64File } from '../utils/upload.js';
 export const getLabOrders = async (clinicId, type, statusFilter) => {
     console.log(`[LAB/RAD] Fetching ${type} orders for clinic ${clinicId} | Status: ${statusFilter || 'all'}`);
     const typeList = type === 'LAB' ? ['LAB', 'Laboratory', 'laboratory'] : ['RADIOLOGY', 'Radiology', 'radiology', 'RAD'];
@@ -77,6 +78,16 @@ export const completeLabOrder = async (clinicId, orderId, data) => {
     // We maintain backward compatibility but enforce the new status name 'Completed'
     const updateData = { testStatus: 'Completed' };
     if (data.result) {
+        // Enforce base64 file format validation if it's a JSON attachment
+        try {
+            const parsed = JSON.parse(data.result);
+            if (parsed && typeof parsed === 'object' && parsed.fileData) {
+                validateBase64File(parsed.fileData);
+            }
+        }
+        catch (e) {
+            // Not a JSON result or no fileData, which is fine (regular report text)
+        }
         updateData.result = data.result;
     }
     // Payment/Price updates are now ignored in the technical flow to preserve Billing integrity

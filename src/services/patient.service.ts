@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../utils/AppError.js';
 import bcrypt from 'bcryptjs';
+import { validateBase64File } from '../utils/upload.js';
 
 interface CreateAppointmentData {
     clinicId: number;
@@ -192,6 +193,9 @@ export const uploadPatientDocument = async (clinicId: number, data: any) => {
     if (!patientId) throw new AppError('Patient ID is required', 400);
     if (!name) throw new AppError('Document name is required', 400);
     if (!url) throw new AppError('Document URL is required', 400);
+
+    // Enforce base64 file format (PDF / JPEG only)
+    validateBase64File(url);
 
     return await prisma.patient_document.create({
         data: {

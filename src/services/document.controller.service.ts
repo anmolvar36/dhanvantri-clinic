@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../utils/AppError.js';
+import { validateBase64File } from '../utils/upload.js';
 
 export const getDocumentRecords = async (clinicId: number, options?: { patientId?: number; archivedOnly?: boolean }) => {
     const where: any = { clinicId };
@@ -47,6 +48,9 @@ export const createDocumentRecord = async (
     payload: { patientId: number; documentType: string; fileName?: string; notes?: string; fileData?: string }
 ) => {
     const { patientId, documentType, fileName, notes, fileData } = payload;
+
+    // Enforce base64 file format (PDF / JPEG only)
+    validateBase64File(fileData);
 
     const record = await prisma.medicalrecord.create({
         data: {
@@ -117,6 +121,9 @@ export const createStaffDocumentRecord = async (
     const fileName = payload.fileName;
     const notes = payload.notes;
     const fileData = payload.fileData;
+
+    // Enforce base64 file format (PDF / JPEG only)
+    validateBase64File(fileData);
 
     if (!staffId || isNaN(staffId)) throw new AppError('Valid staff ID is required', 400);
     const staff = await prisma.clinicstaff.findFirst({ where: { id: staffId, clinicId } });

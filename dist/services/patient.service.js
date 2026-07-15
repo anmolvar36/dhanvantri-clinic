@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../utils/AppError.js';
 import bcrypt from 'bcryptjs';
+import { validateBase64File } from '../utils/upload.js';
 export const getMyAppointments = async (userId, email, clinicId) => {
     const whereClause = {
         OR: [
@@ -167,6 +168,8 @@ export const uploadPatientDocument = async (clinicId, data) => {
         throw new AppError('Document name is required', 400);
     if (!url)
         throw new AppError('Document URL is required', 400);
+    // Enforce base64 file format (PDF / JPEG only)
+    validateBase64File(url);
     return await prisma.patient_document.create({
         data: {
             clinicId,
