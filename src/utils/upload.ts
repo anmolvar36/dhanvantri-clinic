@@ -22,15 +22,15 @@ if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Allowed MIME types
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'application/pdf'];
+// Allowed MIME types for Logo uploads (Images only)
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
-// Magic byte signatures for JPEG/PDF validation
-// These are the actual binary signatures found at the start of valid files
+// Magic byte signatures for JPEG/PNG/WEBP validation
 const MAGIC_BYTES: Record<string, Buffer[]> = {
     'image/jpeg': [Buffer.from([0xff, 0xd8, 0xff])],
     'image/jpg':  [Buffer.from([0xff, 0xd8, 0xff])],
-    'application/pdf': [Buffer.from([0x25, 0x50, 0x44, 0x46])], // %PDF
+    'image/png':  [Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+    'image/webp': [Buffer.from([0x52, 0x49, 0x46, 0x46])], // RIFF
 };
 
 /**
@@ -48,9 +48,22 @@ const validateMagicBytes = (buffer: Buffer, mimetype: string): boolean => {
 const storage = multer.memoryStorage();
 
 const fileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+    const fileName = (file.originalname || '').toLowerCase();
+    
+    // WASA Security Fix: Reject double extensions and script payloads (.svg, .php, .pdf, .exe, etc. for logo)
+    const dangerousExtensions = ['.svg', '.html', '.php', '.js', '.exe', '.sh', '.pdf'];
+    const parts = fileName.split('.');
+
+    if (parts.length > 2 || dangerousExtensions.some(ext => fileName.includes(ext))) {
+        return cb(new AppError(
+            'Invalid file format. Double extensions and non-image files (.svg, .pdf, etc.) are strictly prohibited.',
+            400
+        ) as any);
+    }
+
     if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
         return cb(new AppError(
-            `Invalid file type "${file.mimetype}". Only PDF and JPEG/JPG files are allowed.`,
+            `Invalid file type "${file.mimetype}". Only JPEG, PNG, and WebP image files are allowed for Logo upload.`,
             400
         ) as any);
     }
@@ -89,14 +102,14 @@ export const uploadLogo = {
                 const isValidImage = validateMagicBytes(req.file.buffer, req.file.mimetype);
                 if (!isValidImage) {
                     return next(new AppError(
-                        'File content does not match the declared PDF or JPEG type. Upload rejected.',
+                        'File content does not match declared JPEG, PNG, or WebP image type. Upload rejected.',
                         400
                     ));
                 }
 
                 // Generate secure random filename — no user input involved
-                const ext = (req.file.mimetype === 'image/jpeg' || req.file.mimetype === 'image/jpg') ? '.jpg'
-                         : req.file.mimetype === 'application/pdf' ? '.pdf'
+                const ext = (req.file.mimetype === 'image/png') ? '.png'
+                         : (req.file.mimetype === 'image/webp') ? '.webp'
                          : '.jpg';
                 const secureFilename = `logo-${crypto.randomUUID()}${ext}`;
                 const destPath = path.join(uploadDir, secureFilename);
@@ -115,7 +128,7 @@ export const uploadLogo = {
 };
 
 /**
- * Validates a base64 file data URL to ensure it is strictly a PDF or JPEG file,
+ * Validates a base64 file data URL to ensure it is strictly a PDF or JPEG/PNG file,
  * has valid magic bytes, and does not exceed the size limit.
  */
 export const validateBase64File = (fileData?: string) => {
@@ -130,9 +143,9 @@ export const validateBase64File = (fileData?: string) => {
     const mimetype = match[1];
     const base64Payload = match[2];
 
-    const ALLOWED = ['application/pdf', 'image/jpeg', 'image/jpg'];
+    const ALLOWED = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!ALLOWED.includes(mimetype)) {
-        throw new AppError('Only PDF and JPEG files are allowed.', 400);
+        throw new AppError('Only PDF, JPEG, PNG, and WebP files are allowed.', 400);
     }
 
     const buffer = Buffer.from(base64Payload, 'base64');
@@ -147,12 +160,17 @@ export const validateBase64File = (fileData?: string) => {
     if (mimetype === 'application/pdf') {
         // %PDF
         valid = buffer.slice(0, 4).equals(Buffer.from([0x25, 0x50, 0x44, 0x46]));
+    } else if (mimetype === 'image/png') {
+        valid = buffer.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    } else if (mimetype === 'image/webp') {
+        valid = buffer.slice(0, 4).equals(Buffer.from([0x52, 0x49, 0x46, 0x46]));
     } else {
         // JPEG starts with 0xff, 0xd8, 0xff
         valid = buffer.slice(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]));
     }
 
     if (!valid) {
-        throw new AppError('File content mismatch. The uploaded file is not a valid PDF or JPEG image.', 400);
+        throw new AppError('File content mismatch. The uploaded file content is invalid.', 400);
     }
 };
+

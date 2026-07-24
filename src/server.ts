@@ -47,6 +47,13 @@ const PORT = Number(process.env.PORT) || 5000;
 
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
+  xFrameOptions: { action: "sameorigin" },
+  strictTransportSecurity: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  },
+  xContentTypeOptions: true,
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -59,6 +66,15 @@ app.use(helmet({
   },
   referrerPolicy: { policy: "strict-origin-when-cross-origin" }
 }));
+
+// Additional HTTP Security Headers Middleware
+app.use((_req, res, next) => {
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Permissions-Policy', 'geolocation=(), camera=(), microphone=()');
+  next();
+});
+
 app.use(compression());
 
 
