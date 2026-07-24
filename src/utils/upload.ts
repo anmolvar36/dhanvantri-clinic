@@ -45,23 +45,33 @@ const validateMagicBytes = (buffer: Buffer, mimetype: string): boolean => {
 };
 
 // Use memory storage so we can inspect magic bytes BEFORE writing to disk
-const storage = multer.memoryStorage();
-
 const fileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     const fileName = (file.originalname || '').toLowerCase();
-    
-    // WASA Security Fix: Reject double extensions and script payloads (.svg, .php, .pdf, .exe, etc. for logo)
-    const dangerousExtensions = ['.svg', '.html', '.php', '.js', '.exe', '.sh', '.pdf'];
-    const parts = fileName.split('.');
 
-    if (parts.length > 2 || dangerousExtensions.some(ext => fileName.includes(ext))) {
+    const allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
+    const dangerousExts = ['svg', 'html', 'htm', 'php', 'js', 'exe', 'sh', 'bat', 'pdf', 'asp', 'aspx', 'jsp'];
+    
+    const parts = fileName.split('.').filter(Boolean);
+    const lastExt = parts.pop() || '';
+
+    // 1. Check final extension
+    if (!allowedExts.includes(lastExt)) {
         return cb(new AppError(
-            'Invalid file format. Double extensions and non-image files (.svg, .pdf, etc.) are strictly prohibited.',
+            'Invalid logo file. Only JPG, JPEG, PNG, and WEBP image files are allowed for Logo upload.',
             400
         ) as any);
     }
 
-    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+    // 2. Double extension check (reject if any prior extension part is a dangerous script/document)
+    const hasDangerousPrefix = parts.some(part => dangerousExts.includes(part));
+    if (hasDangerousPrefix) {
+        return cb(new AppError(
+            'Invalid file format. Script/document double extensions (.svg, .pdf, .php, etc.) are strictly prohibited.',
+            400
+        ) as any);
+    }
+
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype) && file.mimetype) {
         return cb(new AppError(
             `Invalid file type "${file.mimetype}". Only JPEG, PNG, and WebP image files are allowed for Logo upload.`,
             400
@@ -69,6 +79,8 @@ const fileFilter = (_req: any, file: Express.Multer.File, cb: multer.FileFilterC
     }
     cb(null, true);
 };
+
+const storage = multer.memoryStorage();
 
 // Intermediate multer instance (memory storage for magic byte check)
 const memUpload = multer({
