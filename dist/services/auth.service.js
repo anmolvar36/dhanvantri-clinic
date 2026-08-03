@@ -847,7 +847,10 @@ export const login = async (data, ip, device) => {
     // we consider the session expired and allow a new login to hijack/override it.
     if (user.sessionToken) {
         const inactivityLimit = 15 * 60 * 1000; // 15 minutes session timeout
-        const timeSinceLastActivity = Date.now() - new Date(user.updatedAt).getTime();
+        // Timezone-safe comparison by getting the current time from the database
+        const dbTimeResult = await prisma.$queryRawUnsafe('SELECT NOW() as dbNow');
+        const dbNow = dbTimeResult?.[0]?.dbNow ? new Date(dbTimeResult[0].dbNow) : new Date();
+        const timeSinceLastActivity = dbNow.getTime() - new Date(user.updatedAt).getTime();
         const isSessionActive = timeSinceLastActivity < inactivityLimit;
         if (isSessionActive) {
             throw new AppError('This account is already logged in from another device. Please log out from the existing session first.', 409);

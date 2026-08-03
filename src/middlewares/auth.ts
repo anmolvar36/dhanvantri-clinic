@@ -73,11 +73,13 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
         }
         
         // Touch updatedAt to keep session active (throttled to max once per minute)
-        const oneMinuteAgo = new Date(Date.now() - 60000);
+        const dbTimeResult = await prisma.$queryRawUnsafe<any[]>('SELECT NOW() as dbNow');
+        const dbNow = dbTimeResult?.[0]?.dbNow ? new Date(dbTimeResult[0].dbNow) : new Date();
+        const oneMinuteAgo = new Date(dbNow.getTime() - 60000);
         if (!currentUser.updatedAt || new Date(currentUser.updatedAt) < oneMinuteAgo) {
             await prisma.user.update({
                 where: { id: currentUser.id },
-                data: { updatedAt: new Date() }
+                data: { updatedAt: dbNow }
             });
         }
         // ─────────────────────────────────────────────────────────────────────
